@@ -272,6 +272,27 @@ namespace System.Linq.Dynamic.Tests
 
         #endregion
 
+        [TestMethod]
+        public void NullCoalescing()
+        {
+            //Arrange
+            var testModels = User.GenerateSampleModels(10, true);
+            var expectedResult = testModels.AsQueryable().Select(u => new { UserName = u.UserName, NullableAge = u.NullableAge ?? (3 * 3) }).ToArray();
+            var expectedResult2 = testModels.AsQueryable().Where(u => (u.NullableAge ?? 10) == 10).ToArray();
+
+            //Act
+            var result = testModels.AsQueryable().Select("new (UserName, NullableAge ?? (3*3))");
+            var result2 = testModels.AsQueryable().Where("(NullableAge ?? 10)==10");
+            var result3 = testModels.AsQueryable().Select("NullableAge ?? @0", 10);
+
+            //Assert
+            CollectionAssert.AreEqual(
+                expectedResult.Select(x => "{UserName=" + x.UserName + ", NullableAge=" + x.NullableAge + "}").ToArray(),
+                result.AsEnumerable().Select(x => x.ToString()).ToArray());
+            CollectionAssert.AreEqual(expectedResult2, result2.Cast<User>().ToArray());
+            CollectionAssert.AreEqual(testModels.Select(m => m.NullableAge ?? 10).ToArray(), result3.Cast<int>().ToArray());
+        }
+
     }
 
 }

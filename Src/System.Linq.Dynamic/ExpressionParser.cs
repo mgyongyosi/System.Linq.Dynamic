@@ -56,6 +56,7 @@ namespace System.Linq.Dynamic
             DoubleBar,
             DoubleGreaterThan,
             DoubleLessThan,
+            NullCoalescing
         }
 
         interface ILogicalSignatures
@@ -374,7 +375,7 @@ namespace System.Linq.Dynamic
         Expression ParseExpression()
         {
             int errorPos = _token.pos;
-            Expression expr = ParseConditionalOr();
+            Expression expr = ParseNullCoalescing();
             if (_token.id == TokenId.Question)
             {
                 NextToken();
@@ -383,6 +384,19 @@ namespace System.Linq.Dynamic
                 NextToken();
                 Expression expr2 = ParseExpression();
                 expr = GenerateConditional(expr, expr1, expr2, errorPos);
+            }
+            return expr;
+        }
+
+        // ?? (null-coalescing) operator
+        Expression ParseNullCoalescing()
+        {
+            Expression expr = ParseConditionalOr();
+            if (_token.id == TokenId.NullCoalescing)
+            {
+                NextToken();
+                Expression right = ParseExpression();
+                expr = Expression.Coalesce(expr, right);
             }
             return expr;
         }
@@ -1313,19 +1327,24 @@ namespace System.Linq.Dynamic
         static bool TryGetMemberName(Expression expression, out string memberName)
         {
             var memberExpression = expression as MemberExpression;
-            if( memberExpression != null )
+
+            if (memberExpression == null && expression.NodeType == ExpressionType.Coalesce)
+                memberExpression = ((expression as BinaryExpression).Left) as MemberExpression;
+
+            if (memberExpression != null)
             {
                 memberName = memberExpression.Member.Name;
                 return true;
             }
-//#if !NET35
-//            var dynamicExpression = expression as Expressions.DynamicExpression;
-//            if (dynamicExpression != null)
-//            {
-//                memberName = ((GetMemberBinder)dynamicExpression.Binder).Name;
-//                return true;
-//            }
-//#endif
+
+            //#if !NET35
+            //            var dynamicExpression = expression as Expressions.DynamicExpression;
+            //            if (dynamicExpression != null)
+            //            {
+            //                memberName = ((GetMemberBinder)dynamicExpression.Binder).Name;
+            //                return true;
+            //            }
+            //#endif
 
             memberName = null;
             return false;
@@ -2084,7 +2103,15 @@ namespace System.Linq.Dynamic
                     break;
                 case '?':
                     NextChar();
-                    t = TokenId.Question;
+                    if (_ch == '?')
+                    {
+                        NextChar();
+                        t = TokenId.NullCoalescing;
+                    }
+                    else
+                    {
+                        t = TokenId.Question;
+                    }
                     break;
                 case '[':
                     NextChar();
